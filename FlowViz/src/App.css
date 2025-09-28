@@ -1,0 +1,128 @@
+#root {
+  max-width: 1280px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+/* Custom dark scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* Firefox */
+.custom-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none; 
+}
+
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  min-height: 80vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-right: 1px solid #2a2a2a;
+  padding: 1rem;
+  text-align: left;
+}
+
+.sidebar-header {
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.sidebar-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sidebar-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #363636;
+  background: #1b1b1b;
+  color: #eaeaea;
+}
+
+.sidebar-button {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #363636;
+  background: #242424;
+  color: #eaeaea;
+  cursor: pointer;
+}
+
+.sidebar-button:hover {
+  background: #2b2b2b;
+}
+
+.main-content {
+  padding: 1rem 1.5rem;
+  text-align: left;
+}
+
+.empty-state {
+  color: #888;
+}
+
+.message-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.message-item {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
