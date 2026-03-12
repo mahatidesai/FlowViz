@@ -26,33 +26,79 @@ function cleanJSON(raw) {
 }
 
 app.post('/api/generate-flow', async (req, res) => {
-  const { text } = req.body;
+  const { text, history, currentDiagram } = req.body;
 
   console.log("📩 Request received:", text);
 
+  const chatContext = history
+  ?.map(m => `${m.sender === 'user' ? "User" : "Assistant"}: ${m.text}`)
+  .join("\n") || "";
+
   const prompt = `
-You are a flow diagram generator.  
-Your task is to read the given text and convert it into a JSON object containing "nodes" and "edges" for a flowchart that follows the React Flow schema.  
+  You are an AI that generates and edits flow diagrams.
 
-Rules:
-- Output ONLY valid JSON, no explanations, no extra text.  
-- Each node must have:
-  { "id": "nX", "position": { "x": number, "y": number }, "data": { "label": "..." }, "type": "input" | "default" }  
-- The first step must always be "input". All other steps must be "default".  
-- Positions must be **dynamic**:  
-  - Arrange nodes vertically (y increasing by 100 for each step).  
-  - Keep x = 0 unless a branch/decision creates parallel flows (then offset x by ±200).  
-- Each edge must have:
-  { "id": "eX", "source": "nX", "target": "nY", "label": "" }  
-- Use sequential IDs: n1, n2, n3...  
-- Each edge should have a unique id as eX 
-- Ensure all node IDs in edges exist.  
-- Output a COMPLETE and VALID JSON object with two keys: "nodes" and "edges".  
-- Do not stop early. Always close all brackets and quotes.  
-- Respond only with JSON, nothing else.
+  Conversation history:
+  ${chatContext}
 
-Text: "${text}"
-`;
+  Current diagram JSON:
+  ${JSON.stringify(currentDiagram)}
+
+  User request:
+  ${text}
+
+  TASK:
+  Update the flow diagram according to the user's request.
+
+  IMPORTANT RULES:
+  - If there is NO current diagram, generate a new one.
+  - If a diagram exists, MODIFY the existing nodes and edges instead of recreating everything.
+  - Preserve existing node IDs whenever possible.
+  - Only add or remove nodes if necessary.
+
+  FLOW LOGIC RULES:
+  - If the text contains conditions such as "if", "else", "otherwise", or "check", create a decision node.
+  - Decision nodes should have type "decision".
+  - Decision nodes usually branch into two edges labeled "Yes" and "No".
+
+  OUTPUT FORMAT:
+  Return ONLY valid JSON with this structure:
+
+  {
+    "nodes": [...],
+    "edges": [...]
+  }
+
+  NODE FORMAT:
+  {
+    "id": "nX",
+    "position": { "x": number, "y": number },
+    "data": { "label": "text" },
+    "type": "input" | "default" | "decision"
+  }
+
+  RULES FOR NODES:
+  - The first node should usually be type "input".
+  - Decision nodes must use type "decision".
+  - All other nodes use type "default".
+
+  EDGE FORMAT:
+  {
+    "id": "eX",
+    "source": "nX",
+    "target": "nY",
+    "label": ""
+  }
+
+  EDGE RULES:
+  - If branching occurs, label edges "Yes" and "No".
+  - Every edge must reference an existing node ID.
+
+  CRITICAL:
+  - Output ONLY JSON
+  - No explanations
+  - No markdown
+  - No text outside the JSON
+  `;
 
   try {
     console.log("➡️ Sending request to Ollama...");
@@ -62,16 +108,18 @@ Text: "${text}"
         model: OLLAMA_MODEL,
         prompt,
         stream: false,
-        format: "json", // force JSON output
+        format: {
+          type: "json_object"
+        },
         keep_alive: OLLAMA_KEEP_ALIVE,
         options: {
           // Reduce over-generation to speed up responses
-          num_predict: 300,
+          num_predict: 120,
           temperature: 0.2,
           top_p: 0.9,
           top_k: 40,
           repeat_penalty: 1.1,
-          num_ctx: 1024
+          num_ctx: 4096
         }
       },
       { responseType: "json", timeout: 60_000 }
@@ -80,7 +128,10 @@ Text: "${text}"
     console.log("📥 Raw Ollama response:", response.data);
 
     // Extract model output
-    const rawText = response.data?.choices?.[0]?.text;
+    const rawText =
+      response.data?.choices?.[0]?.text ||
+      response.data?.response ||
+      "";
     if (!rawText) {
       throw new Error("No text returned from Ollama");
     }
