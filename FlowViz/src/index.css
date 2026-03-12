@@ -1,12 +1,18 @@
+
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'Pogonia';
+  src: url('./assets/fonts/pogonia-regular.ttf');
+}
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Pogonia";
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #151515;
+  color: rgba(245, 245, 255, 0.87);
+  background-color: #010107;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

@@ -1,142 +1,207 @@
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField';
 import { IoMdSend } from "react-icons/io";
-import { TbSquareRoundedArrowLeftFilled } from "react-icons/tb";
-import { useState, useContext } from 'react';
+import { TbLayoutSidebarLeftExpand, TbLayoutSidebarLeftCollapse } from "react-icons/tb";
+import { useState, useContext, useEffect, useRef } from 'react';
 import { MessageContext } from '../context/messageContext';
 import { JsonDataContext } from '../context/flowJsonContext';
 import axios from 'axios';
 import FlowVizLogo from '../assets/FlowVizLogo.png'
 
 const Sidebar = () => {
-    // Contexts
-    const { message, setMessage } = useContext(MessageContext);
-    const { setInitialNodes, setInitialEdges } = useContext(JsonDataContext);
 
-    // States
+    const { message, setMessage } = useContext(MessageContext);
+    const { initialNodes, setInitialNodes, initialEdges, setInitialEdges } = useContext(JsonDataContext);
+
     const [isModalOpen, setIsModalOpen] = useState(true);
     const [newMessage, setNewMessage] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
 
-    // Sending Message and getting the response
+    const scrollRef = useRef(null);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [message]);
+
     const handleMessageSend = async () => {
-        if (!newMessage.trim()) return;
 
-        // Add user + loading messages together
+        if (!newMessage.trim() || isGenerating) return;
+
+        const userMsg = newMessage;
+        setNewMessage("");
+        setIsGenerating(true);
+
+        const updatedMessages = [
+            ...message,
+            { sender: "user", text: userMsg }
+        ];
+
         setMessage(prev => [
             ...prev,
-            { sender: 'user', text: newMessage },
-            { sender: 'server', text: "We are generating the flow diagram. This may take a few seconds." }
+            { sender: 'user', text: userMsg },
+            { sender: 'server', text: "Generating your flow diagram...", isLoading: true }
         ]);
 
         try {
-            // Fetch the data
-            const response = await axios.post('http://localhost:3000/api/generate-flow', { text: newMessage });
-            setNewMessage('');
-            if (response.status === 200) {
-                // Remove loading message
-                setMessage(prev => prev.filter(msg => msg.text !== "Your flow diagram is ready."));
 
-                // Parse JSON safely
-                try {
-                    const jsonData = response.data.flow;   
-                    console.log("THis is jsonData: ", jsonData)
-
-                    console.log("Nodes:", jsonData.nodes);
-                    console.log("Edges:", jsonData.edges);
-
-                    setInitialNodes(jsonData.nodes);    
-                    setInitialEdges(jsonData.edges);
-
-                    setMessage(prev => [...prev, { sender: 'server', text: "✅ Flow diagram generated successfully!" }]);
-                } catch (err) {
-                    console.error("JSON parse error:", err.message);
-                    setMessage(prev => [...prev, { sender: 'server', text: "⚠️ Invalid JSON returned. Please try again." }]);
+            const response = await axios.post('http://localhost:3000/api/generate-flow', {
+                text: userMsg,
+                history: updatedMessages,
+                currentDiagram: {
+                    nodes: initialNodes,
+                    edges: initialEdges
                 }
-            } else {
-                setMessage(prev => prev.map(msg =>
-                    msg.text === "We are generating the flow diagram. This may take a few seconds."
-                        ? { ...msg, text: "❌ Cannot generate the diagram. Please try again later." }
-                        : msg
-                ));
-            }
-        } catch (error) {
-            console.error("Request error:", error.message);
-            setMessage(prev => prev.map(msg =>
-                msg.text === "We are generating the flow diagram. This may take a few seconds."
-                    ? { ...msg, text: "❌ Server error. Please check backend." }
-                    : msg
-            ));
-        }
+            });
 
-        
+            const jsonData = response?.data?.flow;
+
+            if (!jsonData?.nodes || !jsonData?.edges) {
+                throw new Error("Invalid diagram returned");
+            }
+
+            const addedNodes = jsonData.nodes.length - initialNodes.length;
+
+            setInitialNodes(jsonData.nodes);
+            setInitialEdges(jsonData.edges);
+
+            setMessage(prev =>
+                prev.filter(msg => !msg.isLoading).concat([
+                    {
+                        sender: 'server',
+                        text: `✅ Diagram updated ${
+                            addedNodes > 0
+                                ? `(${addedNodes} new steps added)`
+                                : "(structure modified)"
+                        }`
+                    }
+                ])
+            );
+
+        } catch (error) {
+
+            setMessage(prev =>
+                prev.filter(msg => !msg.isLoading).concat([
+                    { sender: 'server', text: "❌ Error generating diagram." }
+                ])
+            );
+
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     return (
-        isModalOpen ?
-            <Box className="flex flex-col justify-between p-2 h-[60vh] md:h-screen w-full md:w-[32vw] lg:w-[28vw] bg-[#252525]">
-                {/* ---------------- Top Bar ----------------------- */}
-                <div className='flex flex-row flex-wrap gap-2 justify-between w-full items-center'>
-                    <div className='w-auto md:w-full flex flex-row items-center gap-2 text-xl md:text-2xl font-bold text-[#1891be] text-start '>
-                        <img className='w-6 h-6 md:w-8 md:h-8' src={FlowVizLogo} alt='FlowViz Logo'></img>
-                        <span>FlowViz</span>
-                    </div>
-                    <div onClick={() => { setIsModalOpen(!isModalOpen) }} className='cursor-pointer'>
-                        <TbSquareRoundedArrowLeftFilled size={25} color={'#1891be'} />
-                    </div>
-                </div>
 
-                {/* -------------- Messages ------------------------- */}
-                <div className="flex flex-col w-full h-full mt-4 mb-3 overflow-y-auto custom-scrollbar">
-                    {message.map((msg, index) => (
-                        <div key={index} className={`p-3 text-sm mt-3 w-[85%] ${
-                            msg.sender === 'user'
-                                ? 'text-start self-end bg-[#151515] rounded-tr-2xl rounded-tl-2xl rounded-bl-2xl'
-                                : 'text-start bg-gray-800 rounded-tr-2xl rounded-tl-2xl rounded-br-2xl'
-                        }`}>
-                            {msg.text}
-                        </div>
-                    ))}
-                </div>
+        <aside className={`transition-all duration-300 ease-in-out border-r border-white/10 ${isModalOpen ? 'w-full md:w-[350px] lg:w-[400px]' : 'w-[60px]'} flex flex-col h-screen`}>
 
-                {/* ---------------------- Bottom Bar ----------------------------- */}
-                <div className=" w-full flex flex-row gap-2 items-center self-end justify-between">
-                    <TextField
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        id="outlined-multiline-flexible"
-                        label="Enter text"
-                        multiline
-                        sx={{
-                            width: '100%',
-                            "& .MuiInputBase-input": { color: "white", padding: "1px 2px" },
-                            "& .MuiInputLabel-root": { color: "white" },
-                            "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-                            "& .MuiOutlinedInput-root": {
-                                "& fieldset": { borderColor: "white" },
-                                "&:hover fieldset": { borderColor: "gray" },
-                                "&.Mui-focused fieldset": { borderColor: "white" },
-                            },
-                        }}
-                    />
-                    <Box onClick={()=> {
-                        handleMessageSend()
-                        setNewMessage('')}} 
-                        className="cursor-pointer h-10 w-10 shrink-0 rounded-3xl bg-[#1891be] flex items-center justify-center">
-                        <div className='text-white'>
-                            <IoMdSend size={20} />
-                        </div>
-                    </Box>
-                </div>
-            </Box>
-            :
-            <div className='flex flex-row justify-between self-start items-center p-2 w-full'>
-                <div className='text-xl md:text-2xl font-bold text-[#1891be] text-start'>
-                    FloViz
-                </div>
-                <div className={'self-start mt-2 ml-2 cursor-pointer'} onClick={() => { setIsModalOpen(!isModalOpen) }}>
-                    <TbSquareRoundedArrowLeftFilled size={25} color={'#1891be'} />
-                </div>
+            {/* Header */}
+
+            <div className={`p-4 flex items-center justify-between border-b border-white/5 ${!isModalOpen && 'flex-col gap-4'}`}>
+
+                {isModalOpen && (
+                    <div className='flex items-center gap-3'>
+                        <img className='w-8 h-8 drop-shadow-[0_0_8px_rgba(24,145,190,0.5)]' src={FlowVizLogo} alt='Logo' />
+                        <span className='text-xl font-bold tracking-tight text-white'>
+                            Flow<span className='text-[#1891be]'>Viz</span>
+                        </span>
+                    </div>
+                )}
+
+                <button
+                    onClick={() => setIsModalOpen(!isModalOpen)}
+                    className='p-1.5 rounded-lg hover:bg-white/5 transition-colors text-[#1891be]'
+                >
+                    {isModalOpen
+                        ? <TbLayoutSidebarLeftCollapse size={26} />
+                        : <TbLayoutSidebarLeftExpand size={26} />
+                    }
+                </button>
+
             </div>
+
+            {isModalOpen && (
+
+                <>
+                    {/* Chat Messages */}
+
+                    <div
+                        ref={scrollRef}
+                        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+                    >
+
+                        {message.map((msg, index) => (
+
+                            <div
+                                key={index}
+                                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+
+                                <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm shadow-sm
+                                    ${msg.sender === 'user'
+                                        ? 'bg-gradient-to-bl from-blue-500/50 to-transparent text-white rounded-tr-none'
+                                        : 'bg-slate-800 text-slate-200 border border-white/5 rounded-tl-none'}
+                                    ${msg.isLoading ? 'animate-pulse border-[#1891be]/30' : ''}
+                                `}>
+
+                                    {msg.text}
+
+                                </div>
+
+                            </div>
+
+                        ))}
+
+                    </div>
+
+                    {/* Input */}
+
+                    <div className="p-2 border-t border-white/5">
+
+                        <div className="flex items-end gap-2 bg-[#010107] rounded-xl p-1.5 border border-slate-700/50">
+
+                            <TextField
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                placeholder="Describe your process..."
+                                multiline
+                                maxRows={4}
+                                variant="standard"
+                                fullWidth
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleMessageSend();
+                                    }
+                                }}
+                                InputProps={{
+                                    disableUnderline: true,
+                                    sx: {
+                                        color: 'white',
+                                        fontSize: '0.9rem',
+                                        px: 1,
+                                        py: 1
+                                    }
+                                }}
+                            />
+
+                            <button
+                                onClick={handleMessageSend}
+                                disabled={!newMessage.trim() || isGenerating}
+                                className="mb-1 p-2 bg-[#1891be] hover:bg-[#157da5] text-white rounded-lg transition-all disabled:opacity-50"
+                            >
+                                <IoMdSend size={20} />
+                            </button>
+
+                        </div>
+
+                    </div>
+                </>
+            )}
+
+        </aside>
     );
 };
+
 export default Sidebar;

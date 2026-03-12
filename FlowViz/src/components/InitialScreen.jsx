@@ -1,19 +1,22 @@
-import img from '../assets/image.png'
-
 const InitialScreen = () => {
-    return(
-        <div className='w-full flex flex-col items-center justify-center p-4 text-center'>
-              <h1 className='text-2xl md:text-3xl font-bold text-[#1891be]'>
-                FlowViz
-            </h1>
-            <div className='text-sm md:text-md mb-5 text-gray-500 mt-2'>
-            <span className="font-bold text-base md:text-lg text-gray-400">Visualize your ideas with ease.<br/></span>
-              Turn plain text into interactive 
-              <span className="font-bold"> flowcharts </span> 
-              in seconds.<br/>
-              </div>
-            <img src={img} alt="image" className='self-center justify-self-center max-w-[90%] md:max-w-[70%] h-auto'/>
-          </div>
-    )
-}
-export default InitialScreen
+  return (
+    <div className="flex min-h-screen w-full flex-col items-center justify-center px-6">
+      <div className="flex flex-col items-center space-y-2">
+        {/* Minimalist Logo/Brand */}
+        <h1 className="text-3xl font-light tracking-widest  text-white">
+          FLOW<span className="font-bold text-sky-500">VIZ</span>
+        </h1>
+        
+        {/* Subtle Divider Line */}
+        <div className="h-px w-24 bg-gradient-to-r from-transparent via-blue-800 to-transparent shadow-[0_0_10px_#22d3ee]" />
+
+        {/* Tagline */}
+        <p className="text-sm uppercase tracking-[0.2em] text-slate-500">
+          Text to Architecture
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default InitialScreen;

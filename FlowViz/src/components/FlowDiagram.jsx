@@ -1,35 +1,131 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { getLayoutedElements } from "../utils/layout";
 import {
   ReactFlow,
   Background,
   Controls,
-  applyEdgeChanges,
   applyNodeChanges,
-  addEdge,
   MiniMap,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import ColorPicker from "react-pick-color";
-import { FaDownload } from "react-icons/fa6";
+import {
+  FaDownload,
+  FaMap,
+  FaPlay,
+  FaArrowsLeftRight,
+  FaArrowsUpDown,
+} from "react-icons/fa6";
+import { toPng } from "html-to-image";
+import DecisionNode from "./DecisionNode";
 
-import { toPng } from "html-to-image"; // for download
+const nodeTypes = {
+  decision: DecisionNode,
+};
 
-const nodeWidth = 150;
-const nodeHeight = 60;
-const spacing = 80;
+const FlowDiagram = ({ initialNodes = [], initialEdges = [] }) => {
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
 
-const FlowDiagram = ({initialNodes, initialEdges}) => {
-  const [nodeColor, setNodeColor] = useState("#fff");
-  const [textColor, setTextColor] = useState("#000");
-  const [edgeColor, setEdgeColor] = useState('#fff');
+  const [nodeColor, setNodeColor] = useState("#0a0a0a");
+  const [textColor, setTextColor] = useState("#ffffff");
+  const [edgeColor, setEdgeColor] = useState("#3b82f6");
+
   const [animateEdges, setAnimateEdges] = useState(false);
-  const [nodeColorModal, setNodeColorModal] = useState(false);
-  const [textColorModal, setTextColorModal] = useState(false);
-  const [edgeColorModal, setEdgeColorModal] = useState(false);
+  const [activeModal, setActiveModal] = useState(null);
   const [showMiniMap, setShowMiniMap] = useState(false);
 
-  // Ref for download
+  /* ---------- Inline Editing ---------- */
+
+  const [editingNode, setEditingNode] = useState(null);
+  const [editingText, setEditingText] = useState("");
+
   const flowWrapperRef = useRef(null);
+
+  /* ---------- Layout Initial Diagram ---------- */
+
+  useEffect(() => {
+    if (!initialNodes.length) return;
+
+    const layouted = getLayoutedElements(initialNodes, initialEdges, "TB");
+
+    setNodes(
+      layouted.nodes.map((node) => {
+        if (node.type === "decision") return node;
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            backgroundColor: nodeColor,
+            color: textColor,
+            borderRadius: "8px",
+            border: "1px solid #444",
+            padding: "6px",
+          },
+        };
+      })
+    );
+    
+    setEdges(
+      layouted.edges.map((edge) => ({
+        ...edge,
+        animated: animateEdges,
+        style: { stroke: edgeColor, strokeWidth: 2 },
+      }))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNodes, initialEdges]);
+
+  /* ---------- Node Styling ---------- */
+
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.type === "decision") return node;
+
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            backgroundColor: nodeColor,
+            color: textColor,
+            borderRadius: "8px",
+            border: "1px solid #444",
+            padding: "6px",
+          },
+        };
+      })
+    );
+  }, [nodeColor, textColor]);
+
+  /* ---------- Edge Styling ---------- */
+
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        animated: animateEdges,
+        style: { stroke: edgeColor, strokeWidth: 2 },
+      }))
+    );
+  }, [edgeColor, animateEdges]);
+
+  /* ---------- Node Change ---------- */
+
+  const onNodesChange = useCallback(
+    (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    []
+  );
+
+  /* ---------- Layout Switch ---------- */
+
+  const onLayout = (direction) => {
+    const layouted = getLayoutedElements(nodes, edges, direction);
+    setNodes([...layouted.nodes]);
+    setEdges([...layouted.edges]);
+  };
+
+  /* ---------- Export PNG ---------- */
 
   const handleDownload = async () => {
     if (!flowWrapperRef.current) return;
@@ -45,169 +141,222 @@ const FlowDiagram = ({initialNodes, initialEdges}) => {
       link.download = "flow-diagram.png";
       link.click();
     } catch (error) {
-      console.error("Error exporting diagram:", error);
+      console.error("Export error:", error);
     }
   };
 
-  // const initialNodes = [
-  //   { id: "n1", position: { x: 0, y: 0 }, data: { label: "Start" }, type: "input" },
-  //   { id: "n2", position: { x: 200, y: 0 }, data: { label: "Choose Option: Login or Signin" }, type: "default" },
-  //   { id: "n3", position: { x: 400, y: -100 }, data: { label: "Signin Page" }, type: "default" },
-  //   { id: "n4", position: { x: 600, y: -100 }, data: { label: "Registration Page" }, type: "default" },
-  //   { id: "n5", position: { x: 800, y: -100 }, data: { label: "Enter Email & Password (Signin)" }, type: "default" },
-  //   { id: "n6", position: { x: 1000, y: -100 }, data: { label: "Store Credentials in Backend" }, type: "default" },
-  //   { id: "n7", position: { x: 400, y: 100 }, data: { label: "Login Page" }, type: "default" },
-  //   { id: "n8", position: { x: 600, y: 100 }, data: { label: "Enter Email & Password (Login)" }, type: "default" },
-  //   { id: "n9", position: { x: 800, y: 100 }, data: { label: "Validate Credentials" }, type: "default" },
-  //   { id: "n10", position: { x: 1000, y: 0 }, data: { label: "Homepage" }, type: "output" },
-  //   { id: "n11", position: { x: 800, y: 250 }, data: { label: "Stay on Login Page" }, type: "default" },
-  //   { id: "n12", position: { x: 1200, y: 0 }, data: { label: "End" }, type: "output" }
-  // ];
-  
-  // const initialEdges = [
-  //   { id: "e1-2", source: "n1", target: "n2" },
-  //   { id: "e2-3", source: "n2", target: "n3", label: "Signin" },
-  //   { id: "e2-7", source: "n2", target: "n7", label: "Login" },
-  //   { id: "e3-4", source: "n3", target: "n4" },
-  //   { id: "e4-5", source: "n4", target: "n5" },
-  //   { id: "e5-6", source: "n5", target: "n6" },
-  //   { id: "e6-10", source: "n6", target: "n10" },
-  //   { id: "e7-8", source: "n7", target: "n8" },
-  //   { id: "e8-9", source: "n8", target: "n9" },
-  //   { id: "e9-10", source: "n9", target: "n10", label: "Valid" },
-  //   { id: "e9-11", source: "n9", target: "n11", label: "Invalid" },
-  //   { id: "e10-12", source: "n10", target: "n12" },
-  //   { id: "e11-7", source: "n11", target: "n7" }
-  // ];
+  /* ---------- Toolbar Button ---------- */
 
-  const [nodes, setNodes] = useState([]);
-  const [edges, setEdges] = useState([]);
+  const ToggleButton = ({ active, onClick, children, icon: Icon }) => (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${
+        active
+          ? "bg-gradient-to-bl from-blue-500/50 to-transparent text-white"
+          : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+      }`}
+    >
+      {Icon && <Icon size={14} />}
+      {children}
+    </button>
+  );
 
-  useEffect(()=> {
-    setNodes(initialNodes)
-    setEdges(initialEdges)
-  },[initialNodes, initialEdges])
+  /* ---------- Double Click → Start Editing ---------- */
 
-  //Setting the text and the node color change
-  useEffect(() => {
-    setNodes((nds) =>
-      nds.map((node) => ({
-        ...node,
-        style: { ...node.style, backgroundColor: nodeColor, color: textColor },
-      }))
-    );
-  }, [nodeColor, textColor]);
-
-  // Animation addition in the edges
-  useEffect(() => {
-    setEdges((edg) =>
-      edg.map((edge) => ({
-        ...edge,
-        animated: animateEdges,
-        style: {stroke: edgeColor},
-      }))
-    );
-  }, [animateEdges, edgeColor]);
-
-  
-  const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
-  // const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
-  // const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), []);
-
-  
-  // Layout
-  const onLayout = (direction) => {
-    const updated = nodes.map((node, i) => {
-      if (direction === "TB") return { ...node, position: { x: 0, y: i * (nodeHeight + spacing) } };
-      if (direction === "LR") return { ...node, position: { x: i * (nodeWidth + spacing), y: 0 } };
-      return node;
-    });
-    setNodes(updated);
+  const onNodeDoubleClick = (event, node) => {
+    setEditingNode(node.id);
+    setEditingText(node.data.label);
   };
 
+  /* ---------- Save Edited Text ---------- */
 
+  const saveNodeText = () => {
+    if (!editingNode) return;
+
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === editingNode
+          ? { ...n, data: { ...n.data, label: editingText } }
+          : n
+      )
+    );
+
+    setEditingNode(null);
+  };
+
+  /* ---------- Render Nodes With Editing ---------- */
+
+  const nodesWithEditableText = nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      label:
+        editingNode === node.id ? (
+          <input
+            autoFocus
+            value={editingText}
+            onChange={(e) => setEditingText(e.target.value)}
+            onBlur={saveNodeText}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveNodeText();
+            }}
+            style={{
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: textColor,
+              width: "100%",
+              textAlign: "center",
+            }}
+          />
+        ) : (
+          node.data.label
+        ),
+    },
+  }));
 
   return (
-    <div className="w-full h-full flex flex-col text-black" tabIndex={0}>
-      {/* Top bar */}
-      <div className="w-full text-white p-3 flex gap-6 items-center">
-        <button className="p-1 bg-gray-500 rounded text-sm cursor-pointer" onClick={() => onLayout("TB")}>
-          Vertical Layout
-        </button>
-        <button className="p-1 bg-gray-500 rounded text-sm cursor-pointer" onClick={() => onLayout("LR")}>
-          Horizontal Layout
-        </button>
+    <div
+      className="w-full h-full flex flex-col font-sans"
+      onClick={() => setActiveModal(null)}
+    >
+      {/* ---------- TOP TOOLBAR ---------- */}
 
-        {/* Node Color Picker */}
-        <div onClick={() => setNodeColorModal(!nodeColorModal)} className="flex flex-row items-center cursor-pointer gap-2">
-          Node color
-          <div className="w-6 h-6 rounded-xl cursor-pointer" style={{ backgroundColor: nodeColor }}></div>
+      <div
+        className="w-full border-b border-gray-800 backdrop-blur-md p-3 flex gap-4 items-center z-[100]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Layout */}
+
+        <div className="flex p-1 rounded-lg border border-gray-800 mr-2">
+          <button
+            className="p-2 hover:bg-gray-800 rounded text-white cursor-pointer"
+            title="Vertical Layout"
+            onClick={() => onLayout("TB")}
+          >
+            <FaArrowsUpDown />
+          </button>
+
+          <button
+            className="p-2 hover:bg-gray-800 rounded text-white cursor-pointer"
+            title="Horizontal Layout"
+            onClick={() => onLayout("LR")}
+          >
+            <FaArrowsLeftRight />
+          </button>
         </div>
-        {nodeColorModal && (
-          <ColorPicker
-            color={nodeColor}
-            onChange={(c) => setNodeColor(c.hex)}
-            className="absolute left-[35%] top-[6%] z-[100]"
-          />
-        )}
 
-        {/* Text Color Picker */}
-        <div onClick={() => setTextColorModal(!textColorModal)} className="flex flex-row items-center cursor-pointer gap-2">
-          Text color
-          <div className="w-6 h-6 rounded-xl cursor-pointer" style={{ backgroundColor: textColor }}></div>
+        {/* Color Pickers */}
+
+        <div className="flex gap-4 items-center border-l border-gray-700 pl-4">
+          {[
+            { label: "Node", color: nodeColor, type: "node" },
+            { label: "Text", color: textColor, type: "text" },
+            { label: "Edge", color: edgeColor, type: "edge" },
+          ].map((item) => (
+            <div key={item.type} className="relative">
+              <button
+                onClick={() =>
+                  setActiveModal(
+                    activeModal === item.type ? null : item.type
+                  )
+                }
+                className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                {item.label}
+
+                <div
+                  className="w-4 h-4 rounded-full border border-gray-600"
+                  style={{ backgroundColor: item.color }}
+                />
+              </button>
+
+              {activeModal === item.type && (
+                <div className="absolute top-10 left-0 z-[110] shadow-2xl">
+                  <ColorPicker
+                    color={item.color}
+                    onChange={(c) => {
+                      if (item.type === "node") setNodeColor(c.hex);
+                      if (item.type === "text") setTextColor(c.hex);
+                      if (item.type === "edge") setEdgeColor(c.hex);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-        {textColorModal && (
-          <ColorPicker
-            color={textColor}
-            onChange={(c) => setTextColor(c.hex)}
-            className="absolute left-[45%] top-[6%] z-[100]"
-          />
-        )}
 
-        {/* Edge Color Picker */}
-        <div onClick={() => setEdgeColorModal(!edgeColorModal)} className="flex flex-row items-center cursor-pointer gap-2">
-          Edge color
-          <div className="w-6 h-6 rounded-xl cursor-pointer" style={{ backgroundColor: edgeColor }}></div>
-        </div>
-        {edgeColorModal && (
-          <ColorPicker
-            color={edgeColor}
-            onChange={(c) => setEdgeColor(c.hex)}
-            className="absolute left-[45%] top-[6%] z-[100]"
-          />
-        )}
+        {/* Toggles */}
 
-        {/* MiniMap */}
-        <div onClick={()=> {setShowMiniMap(!showMiniMap)}} className="cursor-pointer">
+        <div className="flex gap-2 ml-4 border-l border-gray-700 pl-4">
+          <ToggleButton
+            active={showMiniMap}
+            onClick={() => setShowMiniMap(!showMiniMap)}
+            icon={FaMap}
+          >
             MiniMap
+          </ToggleButton>
+
+          <ToggleButton
+            active={animateEdges}
+            onClick={() => setAnimateEdges(!animateEdges)}
+            icon={FaPlay}
+          >
+            Animate
+          </ToggleButton>
         </div>
 
-        {/* Edge animation */}
-        <div className="cursor-pointer" onClick={()=> {setAnimateEdges(!animateEdges)}}>
-          Animate Edge
-        </div>
+        {/* Export */}
 
-        {/* Download */}
-        <div onClick={handleDownload} className="flex flex-row gap-2 items-center ml-auto cursor-pointer text-[#1891be]">
-          Download
-          <FaDownload size={18} color={"#1891be"} />
-        </div>
+        <button
+          onClick={handleDownload}
+          className="ml-auto flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg transition-all border border-blue-500/20 active:scale-95"
+        >
+          <span className="text-sm font-semibold">Export PNG</span>
+          <FaDownload size={14} />
+        </button>
       </div>
 
-      {/* Flow area */}
-      <div className="flex-1" ref={flowWrapperRef}>
+      {/* ---------- FLOW CANVAS ---------- */}
+
+      <div className="flex-1 relative" ref={flowWrapperRef}>
         <ReactFlow
-          colorMode="dark"
-          nodes={nodes}
+          style={{ backgroundColor: "#010107" }}
+          nodes={nodesWithEditableText}
           edges={edges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
-          // onEdgesChange={onEdgesChange}
-          // onConnect={onConnect}
+          onNodeDoubleClick={onNodeDoubleClick}
           fitView
+          snapToGrid
+          snapGrid={[15, 15]}
+          defaultEdgeOptions={{
+            style: { strokeWidth: 2 },
+            labelStyle: { fill: "#000000", fontSize: 12 },
+          }}
         >
-          <Background />
-          <Controls className="!text-black" />
-          {showMiniMap && <MiniMap />}
+          <Background variant="dots" gap={20} size={1} color="#333" />
+
+          <Controls
+            style={{
+              background: "#1e293b",
+              borderRadius: "10px",
+              border: "1px solid #334155",
+            }}
+          />
+
+          {showMiniMap && (
+            <MiniMap
+              style={{
+                backgroundColor: "#1a1a1a",
+                borderRadius: "8px",
+                border: "1px solid #333",
+              }}
+              maskColor="rgba(0,0,0,0.4)"
+              nodeColor={() => nodeColor}
+            />
+          )}
         </ReactFlow>
       </div>
     </div>
