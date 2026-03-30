@@ -5,15 +5,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from openai import APIError, OpenAI
 import uvicorn
 
 from helper.clean_json import safe_parse_json
-from helper.flow_build import (
-    build_flow_from_steps,
-    build_prompt,
-    sanitize_llm_steps,
-)
+from helper.flow_build import build_flow_from_steps, build_prompt
 from utils.logger import logger
 from models.FlowRequest import FlowRequest
 # ====================================================================
@@ -71,49 +68,39 @@ def generate_flow(body: FlowRequest):
     prompt = build_prompt(body.text, body.history, body.current_diagram)
 
     system_prompt = """
-        You are a system that builds and updates a flowchart from natural language instructions.
+You build and update flowcharts from natural language. Return ONLY valid JSON — no markdown, no explanation.
 
-Return ONLY valid JSON. No explanation.
+Input may include: the user instruction, conversation history, and current diagram (nodes, edges, labeledFlow).
 
-You will be given:
-- The user's new instruction
-- Optional conversation history
-- Optional current diagram (nodes + edges)
+Output: the UPDATED full "steps" array. Do NOT emit node ids or edges — only "steps".
 
-Your job: produce the UPDATED full "steps" list for the diagram.
-
-If there is an existing diagram, keep it the same unless the user asks to change it.
-Use conversation history + diagram context to resolve references like "that step" or "the last node".
+If a current diagram exists, preserve it unless the user changes it. Use labeledFlow and history to resolve "that step", "before the decision", etc.
 
 Rules:
+1. Logical execution order. One "decision" object uses yes/no string labels for the FIRST step on each branch (not the literal words "Yes"/"No" unless those are the real step names).
+2. Do NOT put "Start" or "End" in steps — the system adds them.
+3. After a decision: put the NEXT shared process step immediately after the decision object in the array ONLY if both branches should meet the same step. If the "no" path is a retry loop, use a no label like "Retry" and do NOT add a fake merge step — retry is only on the no branch.
+4. For "if success then A else retry": yes = A (e.g. "Show order confirmed"), no = "Retry". Put no extra steps between decision and End unless the user asked for them.
+5. Retry / try again: put that text in the "no" label (or similar). The system loops back to the step before the decision.
+6. Avoid vague labels ("Process", "Step"). Max ~5 words per label.
+7. Simple linear descriptions become process steps only (no decision unless the user implies a branch).
 
-1. Steps must be in correct logical order.
-2. Always include Start as the first step and End as the last step.
-3. If there is a decision, its yes/no branches must re-join via a merge step.
-4. Retry loops MUST go back to the correct step.
-5. Avoid vague labels like "Process" or "Step".
-6. Keep labels short (max 5 words).
-7. Only include payment flow if user explicitly mentions payment.
-8. If input is simple steps, generate sequential process nodes only.
-9. Ensure flow: Start → Steps → Decision → Branches → Merge → End
-
-Schema:
+Schema example:
 
 {
   "steps":[
-    {"type":"process","label":"Start"},
-    {"type":"process","label":"..."},
+    {"type":"process","label":"Browse products"},
+    {"type":"process","label":"Add to cart"},
     {
       "type":"decision",
-      "label":"...",
-      "yes":"...",
-      "no":"..."
-    },
-    {"type":"process","label":"End"}
+      "label":"Payment successful?",
+      "yes":"Show order confirmed",
+      "no":"Retry"
+    }
   ]
 }
 
-Output ONLY JSON.
+Output ONLY a JSON object with a "steps" key.
     """
 
     # Calling openai api 
@@ -126,7 +113,7 @@ Output ONLY JSON.
                 },
                 {"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=1500,
+            max_tokens=2048,
         )
         raw = completion.choices[0].message.content or ""
         logger.info("Model response length: %s", len(raw))
