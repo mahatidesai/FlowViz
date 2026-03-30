@@ -11,7 +11,7 @@ import { JsonDataContext } from "../context/flowJsonContext";
 import axios from "axios";
 import FlowVizLogo from "../assets/FlowVizLogo.png";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
 // Loading indicator: animated dots
@@ -84,6 +84,7 @@ const Sidebar = () => {
 
   const handleMessageSend = useCallback(async () => {
     const text = newMessage.trim();
+    console.log("Text: ", text)
     if (!text || isGenerating) return;
 
     setNewMessage("");
